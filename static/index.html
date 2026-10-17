@@ -1,0 +1,64 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StoryLoom</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,700&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3efe6;--ink:#1f2a44;--card:#fffdf8;--accent:#2a5d6b;--line:#d9d2c0;--soft:#e8e1cf}
+@media(prefers-color-scheme:dark){:root{--bg:#141a2b;--ink:#ece6d6;--card:#1d2540;--accent:#7fc4d3;--line:#33406a;--soft:#262f50}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 Nunito,sans-serif}
+main{max-width:760px;margin:0 auto;padding:28px 18px 60px}
+h1,h2{font-family:Fraunces,serif;line-height:1.15}h1{font-size:2.4rem;margin:0}
+.sub{margin:6px 0 24px;opacity:.8}
+nav{display:flex;gap:8px;margin-bottom:18px}nav button{background:none;border:1px solid var(--line);color:var(--ink);padding:6px 14px;border-radius:20px;cursor:pointer;font:inherit}
+nav button.on{background:var(--ink);color:var(--bg)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+label{display:block;font-weight:700;margin:12px 0 4px}
+input,select{width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.go{margin-top:18px;background:var(--accent);color:var(--bg);border:0;padding:12px 22px;border-radius:10px;font:700 1rem Nunito;cursor:pointer}
+.go:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.scene img{width:100%;border-radius:10px;display:block;margin-bottom:14px}
+.scene h2{margin:0 0 8px}.nugget{background:var(--soft);padding:10px 14px;border-radius:8px;margin:14px 0;font-size:.95rem}
+.choices{display:grid;gap:10px;margin-top:10px}.choices button{text-align:left;padding:14px;border-radius:10px;border:2px solid var(--accent);background:none;color:var(--ink);font:inherit;cursor:pointer}
+.choices button:hover{background:var(--soft)}
+audio{width:100%;margin-top:6px}.err{color:#b3261e}.hide{display:none}
+table{width:100%;border-collapse:collapse}th,td{padding:8px;text-align:left;border-bottom:1px solid var(--line)}
+.spin{opacity:.7;padding:30px 0;text-align:center}
+</style></head><body><main>
+<h1>StoryLoom</h1><p class="sub">Pick a topic and a language. Gemini writes the story, Imagen paints it, and you decide what happens next.</p>
+<nav><button id="t1" class="on">Create</button><button id="t2">Audience insights</button></nav>
+<section id="create">
+ <div class="panel" id="form">
+  <label for="topic">What should the story teach?</label>
+  <input id="topic" value="How volcanoes work">
+  <div class="row"><div><label for="age">Reader age</label><select id="age"><option>5-7</option><option selected>8-12</option><option>13-17</option></select></div>
+  <div><label for="lang">Language</label><select id="lang"><option value="en">English</option><option value="hi">Hindi</option><option value="mr">Marathi</option><option value="ta">Tamil</option><option value="bn">Bengali</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option></select></div></div>
+  <label for="tone">Tone</label><select id="tone"><option>adventurous</option><option>funny</option><option>mysterious</option><option>calm bedtime</option></select>
+  <button class="go" id="start">Start the story</button>
+ </div>
+ <div id="out" aria-live="polite"></div>
+</section>
+<section id="insights" class="hide"><div class="panel"><div id="table">Loading…</div></div></section>
+<script>
+const $=id=>document.getElementById(id);let st={history:[],session_id:null};
+$('t1').onclick=()=>tab(1);$('t2').onclick=()=>{tab(2);insights()};
+function tab(n){$('create').classList.toggle('hide',n!=1);$('insights').classList.toggle('hide',n!=2);$('t1').classList.toggle('on',n==1);$('t2').classList.toggle('on',n==2)}
+async function step(choice){
+  $('out').innerHTML='<div class="spin">Writing, painting and recording the next scene…</div>';
+  const body={session_id:st.session_id,topic:$('topic').value,age_group:$('age').value,language:$('lang').value,tone:$('tone').value,history:st.history,choice};
+  try{
+    const r=await fetch('/api/story',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();if(!r.ok)throw new Error(d.detail);
+    st.session_id=d.session_id;st.last=d;
+    const ch=d.ending?'<p><b>The end.</b></p><button class="go" onclick="location.reload()">Write another story</button>':
+      '<div class="choices">'+d.choices.map((c,i)=>`<button data-i="${i}">${esc(c)}</button>`).join('')+'</div>';
+    $('out').innerHTML=`<div class="panel scene"><img src="${d.image}" alt="Illustration for ${esc(d.title)}"><h2>${esc(d.title)}</h2><p>${esc(d.narration)}</p><audio controls autoplay src="${d.audio}"></audio><div class="nugget">${esc(d.learning_nugget)}</div>${ch}</div>`;
+    document.querySelectorAll('.choices button').forEach(b=>b.onclick=()=>{const c=d.choices[b.dataset.i];st.history.push({narration:d.narration,choice:c});step(c)});
+  }catch(e){$('out').innerHTML=`<p class="err">Something went wrong: ${esc(e.message)}. Check the Cloud Run logs and try again.</p>`}
+}
+$('start').onclick=()=>{st.history=[];st.session_id=null;step(null)};
+async function insights(){
+  const rows=await (await fetch('/api/analytics')).json();
+  $('table').innerHTML=rows.length?'<table><tr><th>Language</th><th>Topic</th><th>Sessions</th><th>Scenes</th><th>Finished</th></tr>'+rows.map(r=>`<tr><td>${esc(r.language)}</td><td>${esc(r.topic)}</td><td>${r.sessions}</td><td>${r.scenes}</td><td>${r.completions}</td></tr>`).join('')+'</table>':'No data yet. Play a story first.';
+}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+</script></main></body></html>
