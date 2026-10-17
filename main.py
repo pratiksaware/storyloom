@@ -33,8 +33,11 @@ SCHEMA = [bigquery.SchemaField(n, t) for n, t in [
 
 @app.on_event("startup")
 def init_bq():
-    bq.create_dataset(TABLE.rsplit(".", 1)[0], exists_ok=True)
-    bq.create_table(bigquery.Table(TABLE, schema=SCHEMA), exists_ok=True)
+    try:
+        bq.create_dataset(TABLE.rsplit(".", 1)[0], exists_ok=True)
+        bq.create_table(bigquery.Table(TABLE, schema=SCHEMA), exists_ok=True)
+    except Exception as e:
+        print("BigQuery init skipped:", e)
 
 class Req(BaseModel):
     session_id: str | None = None
