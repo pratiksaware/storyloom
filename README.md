@@ -14,3 +14,6 @@ Model names can be changed with GEMINI_MODEL and IMAGEN_MODEL env vars if your p
 
 ## Extend
 Veo: turn the final scene's image_prompt into a short clip with `ai.models.generate_videos`.
+
+## App Live at
+https://storyloom-200048255855.us-central1.run.app
